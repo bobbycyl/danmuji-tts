@@ -1,0 +1,7 @@
+emoji
+kokoro
+numpy
+orjson
+pygame
+torch
+websockets
