@@ -105,15 +105,30 @@ def input_listener():
                 try:
                     message = websocket.recv()
                     msg = orjson.loads(message)
-                    # print(msg)
-                    if msg["cmd"] in ["danmu", "superchat"]:
+                    print(msg)
+                    is_chat = False
+                    prefix = ""
+
+                    if msg["cmd"] == "danmu":
+                        is_chat = True
+                        prefix = "他说："
+                    elif msg["cmd"] == "gift":
+                        is_chat = True
+                        prefix = "赠送了礼物："
+                    elif msg["cmd"] == "superchat":
+                        is_chat = True
+                        prefix = "发送了醒目留言："
+
+                    if is_chat:
                         danmaku_queue.put(
                             msg["result"]["uname"]
-                            + "他说："
+                            + prefix
                             + emoji.demojize(msg["result"]["msg"], ("[", "]"), "zh")
                         )
                     elif msg["cmd"][:7].lower() == "welcome":
                         danmaku_queue.put("欢迎 " + msg["result"]["uname"])
+                    elif msg["cmd"] == "follow":
+                        danmaku_queue.put(msg["result"]["uname"] + "关注了直播间")
                 except ConnectionClosed:
                     print("连接已关闭")
                     break
