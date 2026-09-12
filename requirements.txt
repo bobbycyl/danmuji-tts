@@ -1,7 +1,6 @@
 emoji
-kokoro
+miniaudio
 numpy
+openai
 orjson
-pygame
-torch
 websockets
