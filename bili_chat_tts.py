@@ -9,7 +9,7 @@ import numpy as np
 import orjson
 import requests
 from websockets.exceptions import ConnectionClosed
-from websockets.sync.client import connect
+from websockets.sync.client import reconnect
 
 # --- 配置区 ---
 URI = "ws://localhost:23333/danmu/sub"
@@ -243,43 +243,54 @@ def tts_worker():
 def input_listener():
     emoji.config.load_language("zh")
     try:
-        with connect(URI) as websocket:
-            print(f"已连接到: {URI}")
+        # reconnect 会在断链后自动重连（指数退避），替代一次性 connect
+        for websocket in reconnect(URI):
+            with websocket:
+                print(f"已连接到: {URI}")
 
-            while True:
-                try:
-                    message = websocket.recv()
-                    msg = orjson.loads(message)
-                    print(msg)
-                    is_chat = False
-                    prefix = ""
+                while True:
+                    try:
+                        message = websocket.recv()
+                    except ConnectionClosed:
+                        print("连接已关闭，正在重连...")
+                        break
 
-                    if msg["cmd"] == "danmu":
-                        is_chat = True
-                        prefix = " 他说: "
-                    elif msg["cmd"] == "gift":
-                        is_chat = True
-                        prefix = " 赠送了礼物: "
-                    elif msg["cmd"] == "superchat":
-                        is_chat = True
-                        prefix = " 发送了醒目留言: "
+                    try:
+                        msg = orjson.loads(message)
+                        print(msg)
+                        is_chat = False
+                        prefix = ""
 
-                    if is_chat:
-                        put_drop_oldest(
-                            danmaku_queue,
-                            msg["result"]["uname"]
-                            + prefix
-                            + emoji.demojize(msg["result"]["msg"], ("[", "]"), "zh"),
-                        )
-                    elif msg["cmd"][:7].lower() == "welcome":
-                        put_drop_oldest(danmaku_queue, "欢迎 " + msg["result"]["uname"])
-                    elif msg["cmd"] == "follow":
-                        put_drop_oldest(
-                            danmaku_queue, msg["result"]["uname"] + "关注了直播间"
-                        )
-                except ConnectionClosed:
-                    print("连接已关闭")
-                    break
+                        if msg["cmd"] == "danmu":
+                            is_chat = True
+                            prefix = " 他说: "
+                        elif msg["cmd"] == "gift":
+                            is_chat = True
+                            prefix = " 赠送了礼物: "
+                        elif msg["cmd"] == "superchat":
+                            is_chat = True
+                            prefix = " 发送了醒目留言: "
+
+                        if is_chat:
+                            put_drop_oldest(
+                                danmaku_queue,
+                                msg["result"]["uname"]
+                                + prefix
+                                + emoji.demojize(
+                                    msg["result"]["msg"], ("[", "]"), "zh"
+                                ),
+                            )
+                        elif msg["cmd"][:7].lower() == "welcome":
+                            put_drop_oldest(
+                                danmaku_queue, "欢迎 " + msg["result"]["uname"]
+                            )
+                        elif msg["cmd"] == "follow":
+                            put_drop_oldest(
+                                danmaku_queue, msg["result"]["uname"] + "关注了直播间"
+                            )
+                    except Exception as e:
+                        # 单条消息解析/字段异常不断链，跳过这条继续收
+                        print(f"处理消息出错: {e}")
 
     except Exception as e:
         print(f"连接发生错误: {e}")
